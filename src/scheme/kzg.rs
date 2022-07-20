@@ -12,7 +12,8 @@ pub use accumulation::{
 };
 pub use msm::MSM;
 
-pub fn langranges<C: Curve, T>(
+/// chao: let [i,j] = [sum(relations), max(statement)], return l_i, l_j
+pub fn lagranges<C: Curve, T>(
     protocol: &Protocol<C>,
     statements: &[Vec<T>],
 ) -> impl IntoIterator<Item = i32> {

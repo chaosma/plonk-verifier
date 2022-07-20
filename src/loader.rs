@@ -125,7 +125,7 @@ pub trait LoadedScalar<F: PrimeField>: Clone + Debug + FieldOps {
 
     fn powers(&self, n: usize) -> Vec<Self> {
         iter::once(self.loader().load_one())
-            .chain(
+            .chain( // chao: successors will run forever, use take to take first n-1 items
                 iter::successors(Some(self.clone()), |power| Some(power.clone() * self))
                     .take(n - 1),
             )

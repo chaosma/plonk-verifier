@@ -62,6 +62,7 @@ where
     L: Loader<C>,
 {
     lhs: MSM<C, L>,
+    /// chao: plonk paper has two pairings, accumulate these two pairings.
     rhs: MSM<C, L>,
 }
 

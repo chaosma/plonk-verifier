@@ -88,6 +88,7 @@ where
             .sum();
 
         let mut accumulator = Accumulator::new(lhs, rhs.into_iter().sum());
+        // chao: this seems not necessary
         if let Some(old_accumulator) = old_accumulator {
             accumulator += old_accumulator;
         }
