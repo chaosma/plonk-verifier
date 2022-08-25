@@ -6,6 +6,7 @@ use crate::{
     Error,
 };
 
+pub mod circom_plonk;
 pub mod plonk;
 pub mod shplonk;
 
