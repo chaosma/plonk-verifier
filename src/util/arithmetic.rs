@@ -131,7 +131,11 @@ impl<F: PrimeField> Domain<F> {
     pub fn new(k: usize) -> Self {
         let n = 1 << k;
         let n_inv = F::from(n as u64).invert().unwrap();
-        let gen = root_of_unity::<F>(k);
+        let gen = iter::successors(Some(F::root_of_unity()), |acc| Some(acc.square()))
+            .take(F::S as usize - k + 1)
+            .last()
+            .unwrap();
+        debug_assert_eq!(gen.pow_vartime([n as u64]), F::one());
         let gen_inv = gen.invert().unwrap();
 
         Self {

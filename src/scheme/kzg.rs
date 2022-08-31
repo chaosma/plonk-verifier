@@ -11,6 +11,7 @@ mod msm;
 pub use accumulation::{
     plonk::PlonkAccumulationScheme, shplonk::ShplonkAccumulationScheme, AccumulationScheme,
     AccumulationStrategy, SameCurveAccumulation,
+    circom_plonk::{CircomPlonkAccumulationScheme, CircomPlonkProof, Protocol as CircomProtocol},
 };
 pub use accumulator::Accumulator;
 pub use cost::{Cost, CostEstimation};
