@@ -130,12 +130,14 @@ where
         _: P,
         accumulator: Accumulator<C::CurveExt, Rc<Halo2Loader<'a, C, C::Scalar, EccChip>>>,
     ) -> Result<Self::Output, Error> {
+        println!("Process was called");
         self.accumulator = Some(match self.accumulator.take() {
             Some(curr_accumulator) => {
                 accumulator + curr_accumulator * &transcript.squeeze_challenge()
             }
             None => accumulator,
         });
+        println!("Process was called after {:#?}", self.accumulator.is_some());
         Ok(())
     }
 }
