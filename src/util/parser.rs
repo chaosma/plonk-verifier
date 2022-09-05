@@ -1,7 +1,6 @@
 use super::Domain;
 use crate::{scheme::kzg::CircomProtocol, util::GroupEncoding};
 use ff::PrimeField;
-use group::Curve;
 use halo2_curves::bn256::{Fq, Fr, G1};
 use itertools::Itertools;
 use serde_json::Value;

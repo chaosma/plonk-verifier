@@ -9,26 +9,31 @@ use crate::{
     scheme::kzg::{self, CircomPlonkAccumulationScheme},
 };
 use group::Curve;
-use halo2_curves::bn256::{Fr, G1Affine, G1};
+use halo2_curves::CurveAffine;
+use halo2_curves::bn256::{Fr, Fq, G1Affine, G1};
 use halo2_proofs::{
     circuit::{floor_planner::V1, Layouter, Value},
     plonk::{self, Circuit},
-    transcript::TranscriptReadBuffer,
 };
-use halo2_wrong_maingate::RegionCtx;
+//use halo2_wrong_maingate::RegionCtx;
 use halo2_wrong_transcript::NativeRepresentation;
 use itertools::Itertools;
+use halo2_wrong_ecc::{
+    integer::rns::Rns,
+    maingate::{RangeInstructions, RegionCtx},
+};
 
 const T: usize = 17;
 const RATE: usize = 16;
 const R_F: usize = 8;
 const R_P: usize = 10;
 
-type Halo2Loader<'a, 'b, C> = halo2::Halo2Loader<'a, 'b, C, LIMBS, BITS>;
 type SameCurveAccumulation<C, L> = kzg::SameCurveAccumulation<C, L, LIMBS, BITS>;
 type PoseidonTranscript<C, L, S, B> =
-    halo2::PoseidonTranscript<C, L, S, B, NativeRepresentation, LIMBS, BITS, T, RATE, R_F, R_P>;
+    halo2::PoseidonTranscript<C, <C as CurveAffine>::ScalarExt, NativeRepresentation, L, S, B, LIMBS, BITS, T, RATE, R_F, R_P>;
 type BaseFieldEccChip<C> = halo2_wrong_ecc::BaseFieldEccChip<C, LIMBS, BITS>;
+type Halo2Loader<'a, C> =
+    halo2::Halo2Loader<'a, C, <C as CurveAffine>::ScalarExt, BaseFieldEccChip<C>>;
 
 pub struct SnarkWitness<C: Curve> {
     protocol: kzg::CircomProtocol<C>,
@@ -46,9 +51,9 @@ impl<C: Curve> SnarkWitness<C> {
     }
 }
 
-fn accumulate<'a, 'b>(
-    loader: &Rc<Halo2Loader<'a, 'b, G1Affine>>,
-    strategy: &mut SameCurveAccumulation<G1, Rc<Halo2Loader<'a, 'b, G1Affine>>>,
+fn accumulate<'a>(
+    loader: &Rc<Halo2Loader<'a, G1Affine>>,
+    strategy: &mut SameCurveAccumulation<G1, Rc<Halo2Loader<'a, G1Affine>>>,
     snark: &SnarkWitness<G1>,
 ) -> Result<(), plonk::Error> {
     let mut transcript = PoseidonTranscript::<G1Affine, Rc<Halo2Loader<G1Affine>>, _, _>::new(
@@ -99,7 +104,7 @@ impl Circuit<Fr> for Accumulation {
         MainGateWithRangeConfig::configure::<Fr>(
             meta,
             vec![BITS / LIMBS],
-            BaseFieldEccChip::<G1Affine>::rns().overflow_lengths(),
+            Rns::<Fq, Fr, LIMBS, BITS>::construct().overflow_lengths(),
         )
     }
 
@@ -108,15 +113,20 @@ impl Circuit<Fr> for Accumulation {
         config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), plonk::Error> {
-        config.load_table(&mut layouter)?;
+        //let main_gate = config.main_gate();
+        let range_chip = config.range_chip();
+
+        range_chip.load_table(&mut layouter)?;
+
         println!("snrks {}", self.snarks.len());
         let (lhs, rhs) = layouter.assign_region(
             || "",
-            |mut region| {
-                let mut offset = 0;
-                let ctx = RegionCtx::new(&mut region, &mut offset);
+            |region| {
+                let offset = 0;
+                let ctx = RegionCtx::new(region, offset);
 
-                let loader = Halo2Loader::<G1Affine>::new(config.ecc_config(), ctx);
+                let ecc_chip = config.ecc_chip();
+                let loader = Halo2Loader::<G1Affine>::new(ecc_chip, ctx);
                 let mut strategy = SameCurveAccumulation::default();
                 for snark in self.snarks.iter() {
                     accumulate(&loader, &mut strategy, snark)?;
@@ -124,13 +134,13 @@ impl Circuit<Fr> for Accumulation {
                 let (lhs, rhs) = strategy.finalize(self.g1);
 
                 loader.print_row_metering();
-                println!("Total: {}", offset);
+                println!("Total row cost: {}", loader.ctx().offset());
 
                 Ok((lhs, rhs))
             },
         )?;
 
-        let ecc_chip = BaseFieldEccChip::<G1Affine>::new(config.ecc_config());
+        let ecc_chip = config.ecc_chip::<G1Affine, LIMBS, BITS>();
         ecc_chip.expose_public(layouter.namespace(|| ""), lhs, 0)?;
         ecc_chip.expose_public(layouter.namespace(|| ""), rhs, 2 * LIMBS)?;
 
@@ -178,7 +188,7 @@ mod tests {
                     .iter()
                     .map(|el| native_loader.load_const(el))
                     .collect(),
-                &mut PoseidonTranscript::<G1Affine, NativeLoader, _, _>::init(snark.0.as_slice()),
+                &mut PoseidonTranscript::<G1Affine, NativeLoader, _, _>::new(snark.0.as_slice()),
                 &mut strategy,
             )
             .unwrap();
@@ -226,8 +236,7 @@ mod tests {
             snarks,
         };
         let k = 20;
-        const ZK: bool = true;
-        MockProver::run::<_, ZK>(k, &circuit, vec![instance])
+        MockProver::run(k, &circuit, vec![instance])
             .unwrap()
             .assert_satisfied();
     }
