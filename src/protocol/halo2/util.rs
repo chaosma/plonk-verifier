@@ -40,6 +40,10 @@ impl<R: Read, C: CurveAffine> TranscriptRead<C::CurveExt, NativeLoader>
             .map_err(|err| Error::Transcript(err.kind(), err.to_string()))
     }
 
+    fn read_ec_point_with_flag(&mut self, enable: bool) -> Result<C::CurveExt, Error> {
+        self.read_ec_point()
+    }
+
     fn read_ec_point(&mut self) -> Result<C::CurveExt, Error> {
         halo2_proofs::transcript::TranscriptRead::read_point(self)
             .map(|ec_point| ec_point.to_curve())

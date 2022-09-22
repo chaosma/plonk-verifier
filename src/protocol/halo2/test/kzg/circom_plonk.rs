@@ -141,6 +141,7 @@ impl Circuit<Fr> for Accumulation {
         )?;
 
         let ecc_chip = config.ecc_chip::<G1Affine, LIMBS, BITS>();
+        //let ecc_chip = BaseFieldEccChip::<G1Affine>::new(config);
         ecc_chip.expose_public(layouter.namespace(|| ""), lhs, 0)?;
         ecc_chip.expose_public(layouter.namespace(|| ""), rhs, 2 * LIMBS)?;
 
@@ -263,5 +264,30 @@ mod tests {
         let d = strategy.decide::<Bn256>(G1Affine::generator(), G2Affine::generator(), srs.s_g2);
         println!("{} isValid", d);
         assert!(d);
+    }
+
+    #[test]
+    fn transcript_squeeze() {
+       use halo2_curves::bn256::Fr;
+       use halo2_curves::CurveAffine;
+       use poseidon::{Poseidon, Spec};
+       let mut hasher = Poseidon::<Fr,T,RATE>::new(R_F, R_P);
+       let trial:[[u8;32];3] = [[
+          102, 220, 242, 23, 171, 87, 162, 223, 228, 126, 83, 45, 179, 123, 168,
+          203, 227, 213, 116, 133, 203, 47, 118, 106, 119, 191, 140, 195, 126,
+          190, 63, 38,
+          ],
+          [
+          57, 71, 210, 142, 121, 28, 206, 98, 154, 21, 30, 215, 182, 239, 122,
+          182, 24, 65, 34, 28, 85, 132, 222, 98, 140, 156, 140, 59, 183, 168, 240,
+          6],
+          [
+          209, 235, 9, 194, 64, 193, 120, 96, 203, 189, 172, 74, 90, 238, 182, 8,
+          204, 15, 73, 18, 159, 238, 224, 41, 65, 15, 53, 172, 208, 118, 244, 0,
+      ]];
+       let trial_r: Vec<_> = trial.into_iter().map(|elem|Fr::from_bytes(&elem).unwrap()).collect();
+       hasher.update(&trial_r[..]);
+       let res = hasher.squeeze();
+       println!("res={:?}", res);
     }
 }

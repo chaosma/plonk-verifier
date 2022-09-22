@@ -1,9 +1,16 @@
-use super::Domain;
+use super::{arithmetic::DomainType, Domain};
 use crate::{scheme::kzg::CircomProtocol, util::GroupEncoding};
 use ff::PrimeField;
 use halo2_curves::bn256::{Fq, Fr, G1};
 use itertools::Itertools;
 use serde_json::Value;
+
+const R: Fr = Fr::from_raw([
+      0xac96341c4ffffffb,
+      0x36fc76959f60cd29,
+      0x666ea36f7879462e,
+      0x0e0a77c19a07df2f,
+]);
 
 pub fn json_to_bn256_g1(json: &Value, key: &str) -> G1 {
     let coords: Vec<String> = json
@@ -21,8 +28,6 @@ pub fn json_to_bn256_g1(json: &Value, key: &str) -> G1 {
         y: Fq::from_str_vartime(coords[1].as_str()).unwrap(),
         z: Fq::from_str_vartime(coords[2].as_str()).unwrap(),
     };
-
-    // println!("{}: {:#?} Affine", key, out.to_affine());
 
     out
 }
@@ -59,7 +64,7 @@ pub fn read_protocol(path: &str) -> CircomProtocol<G1> {
     let json: Value = serde_json::from_str(&json).unwrap();
 
     CircomProtocol {
-        domain: Domain::<Fr>::new(json.get("power").unwrap().as_u64().unwrap() as usize),
+        domain: Domain::<Fr>::new(json.get("power").unwrap().as_u64().unwrap() as usize, DomainType::Circom),
         public_inputs_count: json.get("nPublic").unwrap().as_u64().unwrap() as usize,
         k1: json_to_bn256_fr(&json, "k1"),
         k2: json_to_bn256_fr(&json, "k2"),
@@ -96,7 +101,13 @@ pub fn read_public_signals(paths: Vec<String>) -> Vec<Vec<Fr>> {
                 .iter()
                 .map(|i| i.as_str().unwrap())
                 .into_iter()
-                .map(|i| Fr::from_str_vartime(i).unwrap())
+                .map(|i| {
+                    let mut tmp = R.clone();
+                    let s1 = Fr::from_str_vartime(i).unwrap(); 
+                    tmp *= Fr::from_str_vartime(i).unwrap();
+                    println!("hehehe, after R = {:?}", tmp.to_bytes());
+                    s1
+                })
                 .collect_vec()
         })
         .collect()

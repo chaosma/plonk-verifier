@@ -67,15 +67,17 @@ impl<C: Curve, L: Loader<C>> CircomPlonkProof<C, L> {
         transcript: &mut T,
     ) -> Result<Self, Error> {
         public_signals.iter().for_each(|signal| {
-            transcript.common_scalar(signal).unwrap();
+            println!("hehe, signal={:?}", signal.clone());
+            //transcript.common_scalar(signal).unwrap();
+
         });
 
-        let A = transcript.read_ec_point()?;
-        // println!("Just read A: {:#?}", A);
-        let B = transcript.read_ec_point()?;
-        // println!("Just read B: {:#?}", B);
-        let C = transcript.read_ec_point()?;
-        // println!("Just read C: {:#?}", C);
+        let A = transcript.read_ec_point_with_flag(false)?;
+        println!("Just read A: {:#?}", A);
+        let B = transcript.read_ec_point_with_flag(false)?;
+        println!("Just read B: {:#?}", B);
+        let C = transcript.read_ec_point_with_flag(true)?;
+        println!("Just read C: {:#?}", C);
 
         let beta = transcript.squeeze_challenge();
         println!("beta: {:#?}", beta);
@@ -85,7 +87,7 @@ impl<C: Curve, L: Loader<C>> CircomPlonkProof<C, L> {
         println!("gamma: {:#?}", gamma);
 
         let Z = transcript.read_ec_point()?;
-        // println!("Just read Z: {:#?}", Z);
+        println!("Just read Z: {:#?}", Z);
         let alpha = transcript.squeeze_challenge();
         println!("alpha: {:#?}", alpha);
 

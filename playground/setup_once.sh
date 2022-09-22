@@ -1,7 +1,7 @@
 #!/bin/bash
 
 power=8
-cli="/data/snarkjs/cli.cjs"
+cli="/Users/chao/opensource/appliedzkp/snarkjs/cli.cjs"
 
 echo $snarkjs
 echo "powers of tau ceremony..."
