@@ -116,10 +116,6 @@ where
         Ok(scalar)
     }
 
-    fn read_ec_point_with_flag(&mut self, enable: bool) -> Result<EcPoint, Error>{
-        self.read_ec_point()
-    }
-
     fn read_ec_point(&mut self) -> Result<EcPoint, Error> {
         let ec_point = self.loader.calldataload_ec_point(self.stream);
         self.stream += 0x40;
@@ -198,10 +194,6 @@ where
         })?;
         self.common_scalar(&scalar)?;
         Ok(scalar)
-    }
-
-    fn read_ec_point_with_flag(&mut self, enable: bool) -> Result<C, Error> {
-        self.read_ec_point()
     }
 
     fn read_ec_point(&mut self) -> Result<C, Error> {

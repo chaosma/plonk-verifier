@@ -67,16 +67,14 @@ impl<C: Curve, L: Loader<C>> CircomPlonkProof<C, L> {
         transcript: &mut T,
     ) -> Result<Self, Error> {
         public_signals.iter().for_each(|signal| {
-            println!("hehe, signal={:?}", signal.clone());
-            //transcript.common_scalar(signal).unwrap();
-
+            transcript.common_scalar(signal).unwrap();
         });
 
-        let A = transcript.read_ec_point_with_flag(false)?;
+        let A = transcript.read_ec_point()?;
         println!("Just read A: {:#?}", A);
-        let B = transcript.read_ec_point_with_flag(false)?;
+        let B = transcript.read_ec_point()?;
         println!("Just read B: {:#?}", B);
-        let C = transcript.read_ec_point_with_flag(true)?;
+        let C = transcript.read_ec_point()?;
         println!("Just read C: {:#?}", C);
 
         let beta = transcript.squeeze_challenge();

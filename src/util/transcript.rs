@@ -32,8 +32,6 @@ where
 
     fn read_ec_point(&mut self) -> Result<L::LoadedEcPoint, Error>;
 
-    fn read_ec_point_with_flag(&mut self, enable: bool) -> Result<L::LoadedEcPoint, Error>;
-
     fn read_n_ec_points(&mut self, n: usize) -> Result<Vec<L::LoadedEcPoint>, Error> {
         (0..n).map(|_| self.read_ec_point()).collect()
     }

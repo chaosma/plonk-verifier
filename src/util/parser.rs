@@ -5,13 +5,6 @@ use halo2_curves::bn256::{Fq, Fr, G1};
 use itertools::Itertools;
 use serde_json::Value;
 
-const R: Fr = Fr::from_raw([
-      0xac96341c4ffffffb,
-      0x36fc76959f60cd29,
-      0x666ea36f7879462e,
-      0x0e0a77c19a07df2f,
-]);
-
 pub fn json_to_bn256_g1(json: &Value, key: &str) -> G1 {
     let coords: Vec<String> = json
         .get(key)
@@ -101,13 +94,7 @@ pub fn read_public_signals(paths: Vec<String>) -> Vec<Vec<Fr>> {
                 .iter()
                 .map(|i| i.as_str().unwrap())
                 .into_iter()
-                .map(|i| {
-                    let mut tmp = R.clone();
-                    let s1 = Fr::from_str_vartime(i).unwrap(); 
-                    tmp *= Fr::from_str_vartime(i).unwrap();
-                    println!("hehehe, after R = {:?}", tmp.to_bytes());
-                    s1
-                })
+                .map(|i| Fr::from_str_vartime(i).unwrap())
                 .collect_vec()
         })
         .collect()
@@ -120,5 +107,39 @@ mod tests {
     fn read() {
         let protocol = read_protocol("./src/fixture/verification_key.json");
         println!("{:#?}", protocol.Qm);
+    }
+
+    #[test]
+    fn test_squeeze() {
+       use group::Curve;
+       use halo2_wrong_transcript::PointRepresentation;
+       use halo2_wrong_transcript::NativeRepresentation;
+       use halo2_curves::bn256::Fr;
+       use halo2_curves::CurveAffine;
+       use poseidon::{Poseidon, Spec};
+       use halo2_curves::bn256::G1Affine;
+
+       const R_F: usize = 8;
+       const R_P: usize = 10;
+       const T: usize = 17;
+       const RATE: usize = 16;
+       const LIMBS: usize = 4;
+       const BITS: usize = 68;
+       let mut hasher = Poseidon::<Fr,T,RATE>::new(R_F, R_P);
+       let coords:Vec<_> = vec![
+           "14700933010115888325620158645526013374729828236601363662320783398388001474092",
+           "16805675480775794632351858769706293094367449671446520952469983330053599939069",
+           "1"
+       ];
+       let out = G1 {
+            x: Fq::from_str_vartime(coords[0]).unwrap(),
+            y: Fq::from_str_vartime(coords[1]).unwrap(),
+            z: Fq::from_str_vartime(coords[2]).unwrap(),
+        };
+        let encoded = <NativeRepresentation as PointRepresentation<G1Affine, <G1Affine as CurveAffine>::ScalarExt, LIMBS, BITS>>::encode(out.to_affine()).unwrap();
+        hasher.update(&encoded[..]);
+        let res = hasher.squeeze();
+        println!("res={:?}", res);
+
     }
 }

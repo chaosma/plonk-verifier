@@ -182,27 +182,17 @@ impl<
 
     fn read_ec_point(&mut self 
     ) -> Result<EcPoint<'a, C, C::Scalar, BaseFieldEccChip<C, LIMBS, BITS>>, Error> {
-        self.read_ec_point_with_flag(true)
-    }
-
-    fn read_ec_point_with_flag(
-        &mut self,
-        enable: bool,
-    ) -> Result<EcPoint<'a, C, C::Scalar, BaseFieldEccChip<C, LIMBS, BITS>>, Error> {
         let ec_point = self.stream.as_mut().and_then(|stream| {
-            let mut compressed = C::Repr::default();
-            if stream.read_exact(compressed.as_mut()).is_err() {
-                return circuit::Value::unknown();
-            }
-            Option::<C>::from(C::from_bytes(&compressed))
-                .map(circuit::Value::known)
-                .unwrap_or_else(circuit::Value::unknown)
+        let mut compressed = C::Repr::default();
+        if stream.read_exact(compressed.as_mut()).is_err() {
+            return circuit::Value::unknown();
+        }
+        Option::<C>::from(C::from_bytes(&compressed))
+            .map(circuit::Value::known)
+            .unwrap_or_else(circuit::Value::unknown)
         });
 
         let ec_point = self.loader.assign_ec_point(ec_point);
-        if enable {
-            self.common_ec_point(&ec_point)?;
-        }
         Ok(ec_point)
     }
 }
@@ -331,10 +321,6 @@ impl<
         })?;
         self.common_scalar(&scalar)?;
         Ok(scalar)
-    }
-
-    fn read_ec_point_with_flag(&mut self, enable: bool) -> Result<C::CurveExt, Error> {
-        self.read_ec_point()
     }
 
     fn read_ec_point(&mut self) -> Result<C::CurveExt, Error> {
