@@ -1,6 +1,6 @@
 pragma circom 2.0.0;
 
-template multiply(lambda) {
+template multiply() {
     signal input a;
     signal input b;
     signal c;
@@ -10,8 +10,8 @@ template multiply(lambda) {
     c <== a * b;
     csq <== c * c;
     
-    out <== lambda * csq;
+    out <== 5 * csq;
 }
 
-component main = multiply(7);
+component main = multiply();
 

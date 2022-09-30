@@ -90,11 +90,11 @@ impl<C: Curve, L: Loader<C>> CircomPlonkProof<C, L> {
         println!("alpha: {:#?}", alpha);
 
         let T1 = transcript.read_ec_point()?;
-        // println!("Just read T1: {:#?}", T1);
+        println!("Just read T1: {:#?}", T1);
         let T2 = transcript.read_ec_point()?;
-        // println!("Just read T2: {:#?}", T2);
+        println!("Just read T2: {:#?}", T2);
         let T3 = transcript.read_ec_point()?;
-        // println!("Just read T3: {:#?}", T3);
+        println!("Just read T3: {:#?}", T3);
         let xi = transcript.squeeze_challenge();
         println!("xi: {:#?}", xi);
 

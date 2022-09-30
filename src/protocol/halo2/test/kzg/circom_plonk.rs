@@ -262,7 +262,7 @@ mod tests {
         );
 
         let d = strategy.decide::<Bn256>(G1Affine::generator(), G2Affine::generator(), srs.s_g2);
-        println!("{} isValid", d);
+        println!("hehe isValid = {} ", d);
         assert!(d);
     }
 
