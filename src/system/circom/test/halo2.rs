@@ -258,5 +258,5 @@ fn test() {
 
     let _mock_prover = MockProver::run(k, &circuit, vec![circuit.instances.clone()]).unwrap();
     // FIXME: Make sure either vk or proof doesn't contain ec point at infinity.
-    // _mock_prover.assert_satisfied();
+    _mock_prover.assert_satisfied();
 }
