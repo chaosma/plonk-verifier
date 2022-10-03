@@ -4,8 +4,11 @@ use crate::{
         native::NativeLoader,
     },
     pcs::{
-        kzg::{Accumulator, Gwc19, KzgOnSameCurve, PreAccumulator},
-        AccumulationStrategy, PreAccumulator as _,
+        kzg::{
+            Bdfg21, Gwc19, Kzg, KzgAccumulator, KzgAs, KzgAsProvingKey, KzgAsVerifyingKey,
+            KzgSuccinctVerifyingKey, LimbsEncoding,
+        },
+        AccumulationScheme, AccumulationSchemeProver,
     },
     system::{
         self,
@@ -24,14 +27,17 @@ use halo2_proofs::{
     circuit::{floor_planner::V1, Layouter, Value},
     dev::MockProver,
     plonk::{self, Circuit, ConstraintSystem},
+    poly::{commitment::ParamsProver, kzg::commitment::ParamsKZG},
 };
 use halo2_wrong_ecc::{
     self,
     integer::rns::Rns,
-    maingate::{RangeInstructions, RegionCtx},
+    maingate::{MainGateInstructions, RangeInstructions, RegionCtx},
 };
 use halo2_wrong_transcript::NativeRepresentation;
-use std::rc::Rc;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
+use std::{iter, rc::Rc};
 
 const LIMBS: usize = 4;
 const BITS: usize = 68;
@@ -40,7 +46,12 @@ const RATE: usize = 16;
 const R_F: usize = 8;
 const R_P: usize = 10;
 
-type Plonk = verifier::Plonk<KzgOnSameCurve<Bn256, Gwc19<Bn256>, LIMBS, BITS>>;
+type Pcs = Kzg<Bn256, Bdfg21>;
+type Svk = KzgSuccinctVerifyingKey<G1Affine>;
+type As = KzgAs<Pcs>;
+type AsPk = KzgAsProvingKey<G1Affine>;
+type AsVk = KzgAsVerifyingKey;
+type Plonk = verifier::Plonk<Pcs, LimbsEncoding<LIMBS, BITS>>;
 
 type BaseFieldEccChip = halo2_wrong_ecc::BaseFieldEccChip<G1Affine, LIMBS, BITS>;
 type Halo2Loader<'a> = halo2::Halo2Loader<'a, G1Affine, Fr, BaseFieldEccChip>;
@@ -77,44 +88,67 @@ impl SnarkWitness {
             proof: Value::unknown(),
         }
     }
+
+    pub fn proof(&self) -> Value<&[u8]> {
+        self.proof.as_ref().map(Vec::as_slice)
+    }
 }
 
 pub fn accumulate<'a>(
-    g1: &G1Affine,
+    svk: &Svk,
     loader: &Rc<Halo2Loader<'a>>,
-    snark: &SnarkWitness,
-    curr_accumulator: Option<PreAccumulator<G1Affine, Rc<Halo2Loader<'a>>>>,
-) -> PreAccumulator<G1Affine, Rc<Halo2Loader<'a>>> {
-    let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _, _>::new(
-        loader,
-        snark.proof.as_ref().map(|proof| proof.as_slice()),
-    );
-    let instances = snark
-        .instances
+    snarks: &[SnarkWitness],
+    as_vk: &AsVk,
+    as_proof: Value<&'_ [u8]>,
+) -> KzgAccumulator<G1Affine, Rc<Halo2Loader<'a>>> {
+    let assign_instances = |instances: &[Vec<Value<Fr>>]| {
+        instances
+            .iter()
+            .map(|instances| {
+                instances
+                    .iter()
+                    .map(|instance| loader.assign_scalar(*instance))
+                    .collect_vec()
+            })
+            .collect_vec()
+    };
+
+    let mut accumulators = snarks
         .iter()
-        .map(|instances| {
-            instances
-                .iter()
-                .map(|instance| loader.assign_scalar(*instance))
-                .collect_vec()
+        .flat_map(|snark| {
+            let instances = assign_instances(&snark.instances);
+            let mut transcript =
+                PoseidonTranscript::<Rc<Halo2Loader>, _, _>::new(loader, snark.proof());
+            let proof =
+                Plonk::read_proof(svk, &snark.protocol, &instances, &mut transcript).unwrap();
+            Plonk::succinct_verify(svk, &snark.protocol, &instances, &proof).unwrap()
         })
         .collect_vec();
-    let proof = Plonk::read_proof(&snark.protocol, &instances, &mut transcript).unwrap();
-    let mut accumulator = Plonk::succint_verify(g1, &snark.protocol, &instances, &proof).unwrap();
-    if let Some(curr_accumulator) = curr_accumulator {
-        accumulator += curr_accumulator * transcript.squeeze_challenge();
-    }
-    accumulator
+
+    let acccumulator = if accumulators.len() > 1 {
+        let mut transcript = PoseidonTranscript::<Rc<Halo2Loader>, _, _>::new(loader, as_proof);
+        let proof = As::read_proof(as_vk, &accumulators, &mut transcript).unwrap();
+        As::verify(as_vk, &accumulators, &proof).unwrap()
+    } else {
+        accumulators.pop().unwrap()
+    };
+
+    acccumulator
 }
 
 struct Accumulation {
-    g1: G1Affine,
+    svk: Svk,
     snarks: Vec<SnarkWitness>,
     instances: Vec<Fr>,
+    as_vk: AsVk,
+    as_proof: Value<Vec<u8>>,
 }
 
 impl Accumulation {
     pub fn new<const N: usize>(testdata: Testdata<N>) -> Self {
+        let params =
+            ParamsKZG::<Bn256>::setup(10 as u32, ChaCha20Rng::from_seed(Default::default()));
+
         let vk: VerifyingKey<Bn256> = serde_json::from_str(testdata.vk).unwrap();
         let protocol = compile(&vk);
 
@@ -135,40 +169,42 @@ impl Accumulation {
             })
             .collect_vec();
 
-        let accumulator = public_signals
+        let mut accumulators = public_signals
             .iter()
             .zip(proofs.iter())
-            .fold(None, |curr_accumulator, (public_signals, proof)| {
-                let instances = [public_signals.clone().to_vec()];
+            .flat_map(|(public_signal, proof)| {
+                let instances = [public_signal.clone().to_vec(); 1];
                 let mut transcript =
                     PoseidonTranscript::<NativeLoader, _, _>::new(proof.as_slice());
-                let proof = Plonk::read_proof(&protocol, &instances, &mut transcript).unwrap();
-                let mut accumulator =
-                    Plonk::succint_verify(&vk.svk(), &protocol, &instances, &proof).unwrap();
-                if let Some(curr_accumulator) = curr_accumulator {
-                    accumulator += curr_accumulator * transcript.squeeze_challenge();
-                }
-                Some(accumulator)
+                let proof =
+                    Plonk::read_proof(&vk.svk().into(), &protocol, &instances, &mut transcript)
+                        .unwrap();
+                Plonk::succinct_verify(&vk.svk().into(), &protocol, &instances, &proof).unwrap()
             })
-            .unwrap()
-            .evaluate();
+            .collect_vec();
 
-        assert!(
-            <KzgOnSameCurve::<Bn256, Gwc19<Bn256>, LIMBS, BITS> as AccumulationStrategy<
-                _,
-                NativeLoader,
-                _,
-            >>::finalize(&vk.dk(), accumulator.clone())
-            .unwrap()
-        );
+        let as_pk = AsPk::new(Some((params.get_g()[0], params.get_g()[1])));
+        let (accumulator, as_proof) = if accumulators.len() > 1 {
+            let mut transcript = PoseidonTranscript::<NativeLoader, _, _>::new(Vec::new());
+            let accumulator = As::create_proof(
+                &as_pk,
+                &accumulators,
+                &mut transcript,
+                ChaCha20Rng::from_seed(Default::default()),
+            )
+            .unwrap();
+            (accumulator, Value::known(transcript.finalize()))
+        } else {
+            (accumulators.pop().unwrap(), Value::unknown())
+        };
 
-        let Accumulator { lhs, rhs } = accumulator;
+        let KzgAccumulator { lhs, rhs } = accumulator;
         let instances = [lhs.x, lhs.y, rhs.x, rhs.y]
             .map(fe_to_limbs::<_, _, LIMBS, BITS>)
             .concat();
 
         Self {
-            g1: vk.svk(),
+            svk: vk.svk().into(),
             snarks: public_signals
                 .into_iter()
                 .zip(proofs)
@@ -183,7 +219,13 @@ impl Accumulation {
                 })
                 .collect(),
             instances,
+            as_vk: as_pk.vk(),
+            as_proof,
         }
+    }
+
+    pub fn as_proof(&self) -> Value<&[u8]> {
+        self.as_proof.as_ref().map(Vec::as_slice)
     }
 }
 
@@ -193,13 +235,15 @@ impl Circuit<Fr> for Accumulation {
 
     fn without_witnesses(&self) -> Self {
         Self {
-            g1: self.g1,
+            svk: self.svk,
             snarks: self
                 .snarks
                 .iter()
                 .map(SnarkWitness::without_witnesses)
                 .collect(),
             instances: self.instances.clone(),
+            as_vk: self.as_vk,
+            as_proof: Value::unknown(),
         }
     }
 
@@ -216,36 +260,42 @@ impl Circuit<Fr> for Accumulation {
         config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), plonk::Error> {
+        let main_gate = config.main_gate();
         let range_chip = config.range_chip();
-        let ecc_chip = config.ecc_chip();
 
         range_chip.load_table(&mut layouter)?;
 
         let (lhs, rhs) = layouter.assign_region(
             || "",
             |region| {
-                let offset = 0;
-                let ctx = RegionCtx::new(region, offset);
+                let ctx = RegionCtx::new(region, 0);
 
-                let loader = Halo2Loader::new(ecc_chip.clone(), ctx);
-                let accumulator = self
-                    .snarks
-                    .iter()
-                    .fold(None, |accumulator, snark| {
-                        Some(accumulate(&self.g1, &loader, snark, accumulator))
-                    })
-                    .unwrap();
-                let Accumulator { lhs, rhs } = accumulator.evaluate();
+                let ecc_chip = config.ecc_chip();
+                let loader = Halo2Loader::new(ecc_chip, ctx);
+                let KzgAccumulator { lhs, rhs } = accumulate(
+                    &self.svk,
+                    &loader,
+                    &self.snarks,
+                    &self.as_vk,
+                    self.as_proof(),
+                );
 
                 loader.print_row_metering();
                 println!("Total row cost: {}", loader.ctx().offset());
 
-                Ok((lhs.into_normalized(), rhs.into_normalized()))
+                Ok((lhs.assigned(), rhs.assigned()))
             },
         )?;
 
-        ecc_chip.expose_public(layouter.namespace(|| ""), lhs, 0)?;
-        ecc_chip.expose_public(layouter.namespace(|| ""), rhs, 2 * LIMBS)?;
+        for (limb, row) in iter::empty()
+            .chain(lhs.x().limbs())
+            .chain(lhs.y().limbs())
+            .chain(rhs.x().limbs())
+            .chain(rhs.y().limbs())
+            .zip(0..)
+        {
+            main_gate.expose_public(layouter.namespace(|| ""), limb.into(), row)?;
+        }
 
         Ok(())
     }
