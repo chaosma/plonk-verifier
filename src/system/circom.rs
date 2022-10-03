@@ -4,7 +4,7 @@ use crate::{
             powers, Curve, CurveAffine, CurveExt, Domain, Field, GroupEncoding, MultiMillerLoop,
             PrimeCurveAffine, PrimeField, Rotation,
         },
-        expression::{
+        protocol::{
             CommonPolynomial, Expression, LinearizationStrategy, Query, QuotientPolynomial,
         },
         Itertools,
@@ -61,7 +61,6 @@ pub fn compile<M: MultiMillerLoop>(vk: &VerifyingKey<M>) -> Protocol<M::G1Affine
     };
 
     Protocol {
-        zk: true,
         domain,
         preprocessed: vec![
             vk.q_m, vk.q_l, vk.q_r, vk.q_o, vk.q_c, vk.s_1, vk.s_2, vk.s_3,
@@ -74,6 +73,7 @@ pub fn compile<M: MultiMillerLoop>(vk: &VerifyingKey<M>) -> Protocol<M::G1Affine
         quotient,
         linearization: Some(LinearizationStrategy::WithoutConstant),
         transcript_initial_state: None,
+        instance_committing_key: None,
         accumulator_indices: Vec::new(),
     }
 }
