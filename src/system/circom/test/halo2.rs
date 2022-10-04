@@ -147,7 +147,7 @@ struct Accumulation {
 impl Accumulation {
     pub fn new<const N: usize>(testdata: Testdata<N>) -> Self {
         let params =
-            ParamsKZG::<Bn256>::setup(10 as u32, ChaCha20Rng::from_seed(Default::default()));
+            ParamsKZG::<Bn256>::setup(2 as u32, ChaCha20Rng::from_seed(Default::default()));
 
         let vk: VerifyingKey<Bn256> = serde_json::from_str(testdata.vk).unwrap();
         let protocol = compile(&vk);
