@@ -6,8 +6,8 @@ use crate::{
     pcs::{
         self,
         kzg::{
-            Bdfg21, Gwc19, Kzg, KzgAccumulator, KzgAs, KzgAsProvingKey, KzgAsVerifyingKey,
-            KzgDecidingKey, KzgSuccinctVerifyingKey, LimbsEncoding,
+            Gwc19, Kzg, KzgAccumulator, KzgAs, KzgAsProvingKey, KzgAsVerifyingKey, KzgDecidingKey,
+            KzgSuccinctVerifyingKey, LimbsEncoding,
         },
         AccumulationScheme, AccumulationSchemeProver, Decider,
     },
@@ -50,7 +50,7 @@ const RATE: usize = 16;
 const R_F: usize = 8;
 const R_P: usize = 10;
 
-type Pcs = Kzg<Bn256, Bdfg21>;
+type Pcs = Kzg<Bn256, Gwc19>;
 type Svk = KzgSuccinctVerifyingKey<G1Affine>;
 type As = KzgAs<Pcs>;
 type AsPk = KzgAsProvingKey<G1Affine>;
@@ -149,10 +149,7 @@ struct Accumulation {
 }
 
 impl Accumulation {
-    pub fn new<const N: usize>(params: ParamsKZG<Bn256>, testdata: Testdata<N>) -> Self {
-        // let params =
-        //     ParamsKZG::<Bn256>::setup(2 as u32, ChaCha20Rng::from_seed(Default::default()));
-
+    pub fn new<const N: usize>(testdata: Testdata<N>) -> Self {
         let vk: VerifyingKey<Bn256> = serde_json::from_str(testdata.vk).unwrap();
         let protocol = compile(&vk);
 
@@ -187,7 +184,7 @@ impl Accumulation {
             })
             .collect_vec();
 
-        let as_pk = AsPk::new(Some((params.get_g()[0], params.get_g()[1])));
+        let as_pk = AsPk::new(Some((vk.svk(), vk.s_g1)));
         let (accumulator, as_proof) = if accumulators.len() > 1 {
             let mut transcript = PoseidonTranscript::<NativeLoader, _, _>::new(Vec::new());
             let accumulator = As::create_proof(
@@ -202,10 +199,7 @@ impl Accumulation {
             (accumulators.pop().unwrap(), Value::unknown())
         };
 
-        assert!(Pcs::decide(
-            &(params.g2(), params.s_g2()).into(),
-            accumulator.clone()
-        ));
+        assert!(Pcs::decide(&vk.dk().into(), accumulator.clone()));
 
         let KzgAccumulator { lhs, rhs } = accumulator;
         let instances = [lhs.x, lhs.y, rhs.x, rhs.y]
@@ -313,15 +307,9 @@ impl Circuit<Fr> for Accumulation {
 #[test]
 fn test() {
     let k = 21;
+    let circuit = Accumulation::new(TESTDATA_HALO2);
 
-    let mut file =
-        std::fs::File::open("/Users/janmajayamall/desktop/halo2-kzg-srs/pot12_final.srs").unwrap();
-    let params = ParamsKZG::<Bn256>::read(&mut file).unwrap();
-
-    // println!("{:#?}{:#?}", params.get_g()[0], params.get_g()[1]);
-    let circuit = Accumulation::new(params, TESTDATA_HALO2);
-
-    // let _mock_prover = MockProver::run(k, &circuit, vec![circuit.instances.clone()]).unwrap();
+    let _mock_prover = MockProver::run(k, &circuit, vec![circuit.instances.clone()]).unwrap();
     // FIXME: Make sure either vk or proof doesn't contain ec point at infinity.
-    // _mock_prover.assert_satisfied();
+    _mock_prover.assert_satisfied();
 }
