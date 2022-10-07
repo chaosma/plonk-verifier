@@ -51,6 +51,7 @@ impl MainGateWithRangeConfig {
     }
 }
 
+
 #[derive(Clone, Default)]
 pub struct MainGateWithRange<F>(Vec<F>);
 

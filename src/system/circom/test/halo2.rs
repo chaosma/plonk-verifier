@@ -4,11 +4,12 @@ use crate::{
         native::NativeLoader,
     },
     pcs::{
+        self,
         kzg::{
             Bdfg21, Gwc19, Kzg, KzgAccumulator, KzgAs, KzgAsProvingKey, KzgAsVerifyingKey,
-            KzgSuccinctVerifyingKey, LimbsEncoding,
+            KzgDecidingKey, KzgSuccinctVerifyingKey, LimbsEncoding,
         },
-        AccumulationScheme, AccumulationSchemeProver,
+        AccumulationScheme, AccumulationSchemeProver, Decider,
     },
     system::{
         self,
@@ -27,7 +28,10 @@ use halo2_proofs::{
     circuit::{floor_planner::V1, Layouter, Value},
     dev::MockProver,
     plonk::{self, Circuit, ConstraintSystem},
-    poly::{commitment::ParamsProver, kzg::commitment::ParamsKZG},
+    poly::{
+        commitment::{Params, ParamsProver},
+        kzg::commitment::ParamsKZG,
+    },
 };
 use halo2_wrong_ecc::{
     self,
@@ -145,9 +149,9 @@ struct Accumulation {
 }
 
 impl Accumulation {
-    pub fn new<const N: usize>(testdata: Testdata<N>) -> Self {
-        let params =
-            ParamsKZG::<Bn256>::setup(2 as u32, ChaCha20Rng::from_seed(Default::default()));
+    pub fn new<const N: usize>(params: ParamsKZG<Bn256>, testdata: Testdata<N>) -> Self {
+        // let params =
+        //     ParamsKZG::<Bn256>::setup(2 as u32, ChaCha20Rng::from_seed(Default::default()));
 
         let vk: VerifyingKey<Bn256> = serde_json::from_str(testdata.vk).unwrap();
         let protocol = compile(&vk);
@@ -197,6 +201,11 @@ impl Accumulation {
         } else {
             (accumulators.pop().unwrap(), Value::unknown())
         };
+
+        assert!(Pcs::decide(
+            &(params.g2(), params.s_g2()).into(),
+            accumulator.clone()
+        ));
 
         let KzgAccumulator { lhs, rhs } = accumulator;
         let instances = [lhs.x, lhs.y, rhs.x, rhs.y]
@@ -304,9 +313,15 @@ impl Circuit<Fr> for Accumulation {
 #[test]
 fn test() {
     let k = 21;
-    let circuit = Accumulation::new(TESTDATA_HALO2);
 
-    let _mock_prover = MockProver::run(k, &circuit, vec![circuit.instances.clone()]).unwrap();
+    let mut file =
+        std::fs::File::open("/Users/janmajayamall/desktop/halo2-kzg-srs/pot12_final.srs").unwrap();
+    let params = ParamsKZG::<Bn256>::read(&mut file).unwrap();
+
+    // println!("{:#?}{:#?}", params.get_g()[0], params.get_g()[1]);
+    let circuit = Accumulation::new(params, TESTDATA_HALO2);
+
+    // let _mock_prover = MockProver::run(k, &circuit, vec![circuit.instances.clone()]).unwrap();
     // FIXME: Make sure either vk or proof doesn't contain ec point at infinity.
-    _mock_prover.assert_satisfied();
+    // _mock_prover.assert_satisfied();
 }

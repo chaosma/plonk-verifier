@@ -111,6 +111,8 @@ pub struct VerifyingKey<M: MultiMillerLoop> {
         deserialize_with = "deserialize_g2::<_, M>"
     )]
     s_g2: M::G2Affine,
+    #[serde(rename(deserialize = "X_1"), deserialize_with = "deserialize_g1")]
+    s_g1: M::G1Affine,
 }
 
 impl<M: MultiMillerLoop> VerifyingKey<M> {
