@@ -184,7 +184,7 @@ impl Accumulation {
             })
             .collect_vec();
 
-        let as_pk = AsPk::new(Some((vk.svk(), vk.s_g1)));
+        let as_pk = AsPk::new(Some(vk.apk().into()));
         let (accumulator, as_proof) = if accumulators.len() > 1 {
             let mut transcript = PoseidonTranscript::<NativeLoader, _, _>::new(Vec::new());
             let accumulator = As::create_proof(

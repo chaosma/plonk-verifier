@@ -123,6 +123,10 @@ impl<M: MultiMillerLoop> VerifyingKey<M> {
     pub fn dk(&self) -> (M::G2Affine, M::G2Affine) {
         (M::G2Affine::generator(), self.s_g2)
     }
+
+    pub fn apk(&self) -> (M::G1Affine, M::G1Affine) {
+        (M::G1Affine::generator(), self.s_g1)
+    }
 }
 
 #[derive(Clone, Debug)]
