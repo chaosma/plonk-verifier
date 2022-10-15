@@ -23,4 +23,6 @@ node $cli -v plonk prove $1_p.zkey witness.wtns proof"$2".json public"$2".json
 echo "verify..."
 node $cli -v plonk verify $vkey public"$2".json proof"$2".json
 
+cp "pot"$power"_final.ptau" ../src/fixture/pot.ptau
+cp $vkey ../src/fixture/verification_key.json
 cp public"$2".json proof"$2".json ../src/fixture/

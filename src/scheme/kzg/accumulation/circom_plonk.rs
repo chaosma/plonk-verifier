@@ -99,20 +99,20 @@ impl<C: Curve, L: Loader<C>> CircomPlonkProof<C, L> {
         println!("xi: {:#?}", xi);
 
         let eval_points = transcript.read_n_scalars(7)?;
-        // println!("Just read a: {:#?}", eval_points[0].clone());
-        // println!("Just read b: {:#?}", eval_points[1].clone());
-        // println!("Just read c: {:#?}", eval_points[2].clone());
-        // println!("Just read s1: {:#?}", eval_points[3].clone());
-        // println!("Just read s2: {:#?}", eval_points[4].clone());
-        // println!("Just read zw: {:#?}", eval_points[5].clone());
-        // println!("Just read r: {:#?}", eval_points[6].clone());
+        println!("Just read a: {:#?}", eval_points[0].clone());
+        println!("Just read b: {:#?}", eval_points[1].clone());
+        println!("Just read c: {:#?}", eval_points[2].clone());
+        println!("Just read s1: {:#?}", eval_points[3].clone());
+        println!("Just read s2: {:#?}", eval_points[4].clone());
+        println!("Just read zw: {:#?}", eval_points[5].clone());
+        println!("Just read r: {:#?}", eval_points[6].clone());
 
         let v = transcript.squeeze_challenge();
         println!("v: {:#?}", v);
         let Wxi: L::LoadedEcPoint = transcript.read_ec_point()?;
-        // println!("Just read WXI: {:#?}", Wxi);
+        println!("Just read WXI: {:#?}", Wxi);
         let Wxiw = transcript.read_ec_point()?;
-        // println!("Just read WXIW: {:#?}", Wxiw);
+        println!("Just read WXIW: {:#?}", Wxiw);
         let u = transcript.squeeze_challenge();
         println!("u: {:#?}", u);
 
@@ -372,9 +372,6 @@ where
         let mut rhs = MSM::default();
         rhs.push(one.clone(), proof.Wxi.clone());
         rhs.push(proof.challenges.u.clone(), proof.Wxiw.clone());
-
-        println!("{:#?} LHS", lhs.clone().evaluate(C::generator()));
-        println!("{:#?} RHS", rhs.clone().evaluate(C::generator()));
 
         let accumulator = Accumulator::new(lhs, rhs);
         strategy.process(loader, transcript, proof, accumulator)

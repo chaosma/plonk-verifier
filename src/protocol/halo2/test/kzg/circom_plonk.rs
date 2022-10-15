@@ -132,6 +132,7 @@ impl Circuit<Fr> for Accumulation {
                     accumulate(&loader, &mut strategy, snark)?;
                 }
                 let (lhs, rhs) = strategy.finalize(self.g1);
+                println!("hehe, halo2 synthesize lhs = {:?}, rhs = {:?}", lhs.clone(), rhs.clone());
 
                 loader.print_row_metering();
                 println!("Total row cost: {}", loader.ctx().offset());
@@ -156,7 +157,9 @@ mod tests {
         loader::{native::NativeLoader, ScalarLoader},
         util::{fe_to_limbs, read_proof_instances, read_protocol, read_public_signals},
     };
-    use halo2_curves::bn256::{Bn256, Fq, G2Affine};
+    use halo2_curves::bn256::{self, Bn256, Fq, G2Affine};
+    use halo2_curves::pairing::MillerLoopResult;
+    use group::Group;
     use halo2_kzg_srs::{Srs, SrsFormat};
     use halo2_proofs::dev::MockProver;
     use std::fs::File;
@@ -214,6 +217,7 @@ mod tests {
 
         // Obtain lhs and rhs accumulator
         let (lhs, rhs) = strategy.finalize(G1::generator());
+        println!("hehe, halo2 acc instance lhs = {:?}, rhs = {:?}", lhs.clone().to_affine(), rhs.clone().to_affine());
         let instance = [
             lhs.to_affine().x,
             lhs.to_affine().y,
@@ -236,7 +240,7 @@ mod tests {
             g1: G1Affine::generator(),
             snarks,
         };
-        let k = 20;
+        let k = 22;
         MockProver::run(k, &circuit, vec![instance])
             .unwrap()
             .assert_satisfied();
@@ -256,12 +260,23 @@ mod tests {
             ],
         );
 
+        let (lhs, rhs) = strategy.finalize(G1::generator());
+        println!("lhs = {:?}, rhs = {:?}", lhs.clone().to_affine(), rhs.clone().to_affine());
         let srs = Srs::<Bn256>::read(
             &mut File::open("./src/fixture/pot.ptau").unwrap(),
             SrsFormat::SnarkJs,
         );
 
-        let d = strategy.decide::<Bn256>(G1Affine::generator(), G2Affine::generator(), srs.s_g2);
+
+        let g2 = bn256::G2Prepared::from(G2Affine::generator());
+        let minus_s_g2 = bn256::G2Prepared::from(-srs.s_g2);
+        let terms = [(&lhs.into(), &g2), (&rhs.into(), &minus_s_g2)];
+        let d: bool = bn256::multi_miller_loop(&terms)
+            .final_exponentiation()
+            .is_identity()
+            .into();
+
+        //let d = strategy.decide::<Bn256>(G1Affine::generator(), G2Affine::generator(), srs.s_g2);
         println!("hehe isValid = {} ", d);
         assert!(d);
     }
