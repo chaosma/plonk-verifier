@@ -49,10 +49,12 @@ sanity-check = []
 halo2_proofs = { git = "https://github.com/han0110/halo2", branch = "feature/configurable-instance-query", package = "halo2_proofs" }
 
 [patch."https://github.com/privacy-scaling-explorations/halo2wrong"]
-halo2_wrong = { git = "https://github.com/han0110/halo2wrong", branch = "feature/range-chip-with-tagged-table", package = "halo2wrong" }
-halo2_wrong_ecc = { git = "https://github.com/han0110/halo2wrong", branch = "feature/range-chip-with-tagged-table", package = "ecc" }
-halo2_wrong_maingate = { git = "https://github.com/han0110/halo2wrong", branch = "feature/range-chip-with-tagged-table", package = "maingate" }
-halo2_wrong_transcript = { git = "https://github.com/han0110/halo2wrong", branch = "feature/range-chip-with-tagged-table", package = "transcript" }
+halo2_wrong_ecc = { path = "/Users/chao/opensource/halo2/references/halo2wrong/ecc", package = "ecc" }
+halo2_wrong_maingate = { path = "/Users/chao/opensource/halo2/references/halo2wrong/maingate", package = "maingate" }
+halo2_wrong_transcript = { path = "/Users/chao/opensource/halo2/references/halo2wrong/transcript", package = "transcript" }
+#halo2_wrong_ecc = { git = "https://github.com/han0110/halo2wrong", branch = "feature/range-chip-with-tagged-table", package = "ecc" }
+#halo2_wrong_maingate = { git = "https://github.com/han0110/halo2wrong", branch = "feature/range-chip-with-tagged-table", package = "maingate" }
+#halo2_wrong_transcript = { git = "https://github.com/han0110/halo2wrong", branch = "feature/range-chip-with-tagged-table", package = "transcript" }
 
 [[example]]
 name = "evm-verifier"
