@@ -7,7 +7,7 @@ use crate::{
     pcs::{
         kzg::{
             Bdfg21, Kzg, KzgAccumulator, KzgAs, KzgAsProvingKey, KzgAsVerifyingKey,
-            KzgSuccinctVerifyingKey, LimbsEncoding, LimbsEncodingInstructions,
+            KzgSuccinctVerifyingKey, LimbsEncoding, LimbsEncodingInstructions, KzgDecidingKey,
         },
         AccumulationScheme, AccumulationSchemeProver,
     },
@@ -36,6 +36,9 @@ use halo2_wrong_ecc::{
 };
 use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 use std::rc::Rc;
+
+// for test_native
+use crate::pcs::{Decider, kzg::Kzg as KzgDecider};
 
 const LIMBS: usize = 4;
 const BITS: usize = 68;
@@ -302,6 +305,41 @@ impl Circuit<Fr> for Accumulation {
     }
 }
 
+pub fn accumulate_native(
+    g1: G1Affine,
+    snarks: &[Snark<G1Affine>],
+) -> KzgAccumulator<G1Affine, NativeLoader> {
+     let svk = g1.into();
+     let mut accumulators = snarks
+         .iter()
+         .flat_map(|snark| {
+                  let mut transcript =
+                      PoseidonTranscript::<NativeLoader, _>::new(snark.proof.as_slice());
+                  let proof =
+                      Plonk::read_proof(&svk, &snark.protocol, &snark.instances, &mut transcript)
+                          .unwrap();
+                  Plonk::succinct_verify(&svk, &snark.protocol, &snark.instances, &proof).unwrap()
+              })
+              .collect_vec();
+
+       let as_pk = AsPk::new(None);
+        let accumulator = if accumulators.len() > 1 {
+            let mut transcript = PoseidonTranscript::<NativeLoader, _>::new(Vec::new());
+            let accumulator = As::create_proof(
+                &as_pk,
+                &accumulators,
+                &mut transcript,
+                ChaCha20Rng::from_seed(Default::default()),
+            )
+            .unwrap();
+            accumulator
+        } else {
+            accumulators.pop().unwrap()
+        };
+    accumulator
+}
+
+
 #[test]
 fn test() {
     let k = 21;
@@ -309,4 +347,36 @@ fn test() {
 
     let mock_prover = MockProver::run(k, &circuit, circuit.instances()).unwrap();
     mock_prover.assert_satisfied();
+}
+
+#[test]
+fn test_native() {
+    let testdata = TESTDATA_HALO2;
+    let vk: VerifyingKey<Bn256> = serde_json::from_str(testdata.vk).unwrap();
+    let protocol = compile(&vk);
+    let public_signals = testdata.public_signals.iter().map(|public_signals| {
+        serde_json::from_str::<PublicSignals<Fr>>(public_signals).unwrap()
+    });
+    let proofs = testdata.proofs.iter().map(|proof| {
+        serde_json::from_str::<Proof<Bn256>>(proof)
+            .unwrap()
+            .to_compressed_le()
+    });
+    let snarks = public_signals.zip(proofs)
+                   .map(|(public_signals, proof)| Snark {
+                    protocol: protocol.clone(),
+                    proof,
+                     instances: vec![public_signals.0],
+                }).into_iter().collect_vec();
+
+    let accumulator = accumulate_native(
+        vk.svk(),
+        &snarks[..],
+    );
+    println!("accumulator: lhs={:?}, rhs={:?}", accumulator.lhs, accumulator.rhs);
+
+    let dk: KzgDecidingKey<_> = KzgDecidingKey::<Bn256>::new(vk.dk().0,vk.dk().1);
+    let res = KzgDecider::<Bn256,KzgAccumulator<G1Affine,NativeLoader>>::decide(&dk, accumulator);
+    println!("pairing result is: {}", res);
+    assert_eq!(res, true);
 }
