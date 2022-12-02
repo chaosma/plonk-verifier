@@ -6,7 +6,7 @@ use crate::{
     },
     pcs::{
         kzg::{
-            Bdfg21, Kzg, KzgAccumulator, KzgAs, KzgAsProvingKey, KzgAsVerifyingKey,
+            Gwc19, Kzg, KzgAccumulator, KzgAs, KzgAsProvingKey, KzgAsVerifyingKey,
             KzgSuccinctVerifyingKey, LimbsEncoding, LimbsEncodingInstructions, KzgDecidingKey,
         },
         AccumulationScheme, AccumulationSchemeProver,
@@ -52,7 +52,7 @@ type Halo2Loader<'a> = loader::halo2::Halo2Loader<'a, G1Affine, BaseFieldEccChip
 type PoseidonTranscript<L, S> =
     circom::transcript::halo2::PoseidonTranscript<G1Affine, L, S, T, RATE, R_F, R_P>;
 
-type Pcs = Kzg<Bn256, Bdfg21>;
+type Pcs = Kzg<Bn256, Gwc19>;
 type Svk = KzgSuccinctVerifyingKey<G1Affine>;
 type As = KzgAs<Pcs>;
 type AsPk = KzgAsProvingKey<G1Affine>;
