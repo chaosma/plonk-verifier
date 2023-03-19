@@ -1,7 +1,7 @@
 use crate::{
     loader::{
         self,
-        halo2::test::{Snark, SnarkWitness},
+        halo2::{test::{Snark, SnarkWitness}, EccInstructions},
         native::NativeLoader,
     },
     pcs::{
@@ -47,7 +47,7 @@ use halo2_wrong_ecc::{
 };
 use paste::paste;
 use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
-use std::rc::Rc;
+use std::{rc::Rc, ops::Deref};
 
 const T: usize = 5;
 const RATE: usize = 4;
@@ -72,14 +72,19 @@ pub fn accumulate<'a>(
     snarks: &[SnarkWitness<G1Affine>],
     as_vk: &AsVk,
     as_proof: Value<&'_ [u8]>,
-) -> KzgAccumulator<G1Affine, Rc<Halo2Loader<'a>>> {
-    let assign_instances = |instances: &[Vec<Value<Fr>>]| {
+) -> (KzgAccumulator<G1Affine, Rc<Halo2Loader<'a>>>, Vec<<BaseFieldEccChip as EccInstructions<'a, G1Affine>>::AssignedScalar>) {
+    let mut flatten_instances = vec![];
+    let mut assign_instances = |instances: &[Vec<Value<Fr>>]| {
         instances
             .iter()
             .map(|instances| {
                 instances
                     .iter()
-                    .map(|instance| loader.assign_scalar(*instance))
+                    .map(|instance| {
+                             let loaded = loader.assign_scalar(*instance);
+                             flatten_instances.push(*loaded.assigned().deref());
+                             loaded 
+                         })
                     .collect_vec()
             })
             .collect_vec()
@@ -105,7 +110,7 @@ pub fn accumulate<'a>(
         accumulators.pop().unwrap()
     };
 
-    acccumulator
+    (acccumulator, flatten_instances)
 }
 
 pub struct Accumulation {
@@ -217,6 +222,7 @@ impl Accumulation {
             const K: u32 = 22;
             halo2_kzg_prepare!(
                 K,
+                // chao: this snark contains two two_snark() !!
                 halo2_kzg_config!(true, 2, Self::accumulator_indices()),
                 Self::two_snark()
             )
@@ -280,14 +286,14 @@ impl Circuit<Fr> for Accumulation {
 
         range_chip.load_table(&mut layouter)?;
 
-        let accumulator_limbs = layouter.assign_region(
+        let (accumulator_limbs, instances) = layouter.assign_region(
             || "",
             |region| {
                 let ctx = RegionCtx::new(region, 0);
 
                 let ecc_chip = config.ecc_chip();
                 let loader = Halo2Loader::new(ecc_chip, ctx);
-                let accumulator = accumulate(
+                let (accumulator, instances) = accumulate(
                     &self.svk,
                     &loader,
                     &self.snarks,
@@ -309,12 +315,18 @@ impl Circuit<Fr> for Accumulation {
                 loader.print_row_metering();
                 println!("Total row cost: {}", loader.ctx().offset());
 
-                Ok(accumulator_limbs)
+                Ok((accumulator_limbs, instances))
             },
         )?;
 
+        let mut row_shift = 0;
         for (row, limb) in accumulator_limbs.enumerate() {
             main_gate.expose_public(layouter.namespace(|| ""), limb, row)?;
+            row_shift += 1;
+        }
+        for (row, instance) in instances.iter().enumerate() {
+            // TODO: chao do not use clone for efficiency
+            main_gate.expose_public(layouter.namespace(|| ""), instance.clone(), row + row_shift)?;
         }
 
         Ok(())
