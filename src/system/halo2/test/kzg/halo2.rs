@@ -39,6 +39,7 @@ use halo2_proofs::{
         },
     },
     transcript::{Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer},
+    dev::MockProver,
 };
 use halo2_wrong_ecc::{
     self,
@@ -82,7 +83,7 @@ pub fn accumulate<'a>(
                     .iter()
                     .map(|instance| {
                              let loaded = loader.assign_scalar(*instance);
-                             flatten_instances.push(*loaded.assigned().deref());
+                             flatten_instances.push(loaded.assigned().deref().clone());
                              loaded 
                          })
                     .collect_vec()
@@ -133,9 +134,12 @@ impl Accumulation {
         let svk = params.get_g()[0].into();
         let snarks = snarks.into_iter().collect_vec();
 
+        let mut target_instances:Vec<Fr> = vec![];
         let mut accumulators = snarks
             .iter()
             .flat_map(|snark| {
+                let tmp: Vec<_> = snark.instances.iter().flatten().collect();
+                target_instances.extend(tmp);
                 let mut transcript =
                     PoseidonTranscript::<NativeLoader, _>::new(snark.proof.as_slice());
                 let proof =
@@ -161,9 +165,10 @@ impl Accumulation {
         };
 
         let KzgAccumulator { lhs, rhs } = accumulator;
-        let instances = [lhs.x, lhs.y, rhs.x, rhs.y]
+        let mut instances = [lhs.x, lhs.y, rhs.x, rhs.y]
             .map(fe_to_limbs::<_, _, LIMBS, BITS>)
             .concat();
+        instances.extend(target_instances);
 
         Self {
             svk,
@@ -372,6 +377,7 @@ macro_rules! test {
     };
 }
 
+
 test!(
     #[ignore = "cause it requires 32GB memory to run"],
     zk_accumulation_two_snark,
@@ -386,3 +392,19 @@ test!(
     halo2_kzg_config!(true, 1, Accumulation::accumulator_indices()),
     Accumulation::two_snark_with_accumulator()
 );
+
+#[test]
+fn test_two_snark_no_accumulator() {
+    let k = 22;
+    let circuit = Accumulation::two_snark();
+    let mock_prover = MockProver::run(k, &circuit, circuit.instances()).unwrap();
+    mock_prover.assert_satisfied();
+}
+
+#[test]
+fn test_two_snark_with_accumulator() {
+    let k = 22;
+    let circuit = Accumulation::two_snark_with_accumulator();
+    let mock_prover = MockProver::run(k, &circuit, circuit.instances()).unwrap();
+    mock_prover.assert_satisfied();
+}
