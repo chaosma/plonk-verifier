@@ -119,6 +119,7 @@ pub fn accumulate<'a>(
         .iter()
         .flat_map(|snark| {
             let protocol = snark.protocol.loaded(loader);
+            //let protocol = snark.protocol.loaded_preprocessed_as_witness(loader);
             let instances = assign_instances(&snark.instances);
             let mut transcript =
                 PoseidonTranscript::<Rc<Halo2Loader>, _>::new(loader, snark.proof());

@@ -251,7 +251,7 @@ where
         let loader = common_poly_eval.zn().loader();
         let mut commitments = iter::empty()
             .chain(protocol.preprocessed.iter().map(Msm::base))
-            .chain(
+            .chain( // chao: we don't commit instance in kzg, this is only for ipa
                 self.committed_instances
                     .as_ref()
                     .map(|committed_instances| {
@@ -357,6 +357,8 @@ where
         common_poly_eval: &CommonPolynomialEvaluation<C, L>,
     ) -> Result<HashMap<Query, L::LoadedScalar>, Error> {
         let loader = common_poly_eval.zn().loader();
+        // chao: calculate the PI(z), since number of rows is small, we directly calculate
+        // instead of commit the entire rows
         let instance_evals = protocol.instance_committing_key.is_none().then(|| {
             let offset = protocol.preprocessed.len();
             let queries = {
@@ -366,7 +368,8 @@ where
                     .numerator
                     .used_query()
                     .into_iter()
-                    .filter(move |query| range.contains(&query.poly))
+                    .filter(move |query| range.contains(&query.poly)) // chao: if numerator
+                                                                      // contains term PI(w^k*x)
             };
             queries
                 .map(move |query| {
@@ -453,6 +456,8 @@ where
             .map(|instance| instance.len())
             .max()
             .unwrap_or_default();
+        // chao: suppose PI(x) = p_0*l_{i0}(x), then PI(w*x) = p_0*l_{i0-1}(x),
+        // i.e. we shift up the PI rows by 1
         -max_rotation..max_instance_len as i32 + min_rotation.abs()
     });
     protocol

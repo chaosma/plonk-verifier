@@ -91,7 +91,7 @@ where
             .iter()
             .map(|&i| loader.load_const(&domain.rotate_scalar(C::Scalar::one(), Rotation(i))))
             .collect_vec();
-        let lagrange_evals = omegas
+        let lagrange_evals = omegas // chao: l_i = (1/n)*(z^n-1)*w^i/(z-w)
             .iter()
             .map(|omega| Fraction::new(numer.clone() * omega, z.clone() - omega))
             .collect_vec();

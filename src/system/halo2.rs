@@ -25,7 +25,7 @@ pub(crate) mod test;
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     pub zk: bool,
-    pub query_instance: bool,
+    pub query_instance: bool, // kzg = false, ipa = true
     pub num_proof: usize,
     pub num_instance: Vec<usize>,
     pub accumulator_indices: Option<Vec<(usize, usize)>>,
@@ -735,6 +735,9 @@ impl<'a, F: FieldExt> Polynomials<'a, F> {
                 accumulator_indices
                     .iter()
                     .cloned()
+                    // chao: halo2 supports proof multiple circuits; when the snark contains 2 acc circuits, num_proof=2
+                    // each acc circuit has num_instance=[16] to hold (lhs, rhs) 
+                    // protocol.num_instance = num_proof * acc_circuit.instance = [16, 16]
                     .map(|(poly, row)| (poly + t * self.num_instance.len(), row))
                     .collect()
             })

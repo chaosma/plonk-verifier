@@ -194,6 +194,7 @@ macro_rules! halo2_create_snark {
 
         Snark::new(
             $protocol.clone(),
+            // chao: e.g. for two acc circuits, instances=[instance1,instance2], i.e. num_instance [16,16]
             instances.into_iter().flatten().collect_vec(),
             proof,
         )
