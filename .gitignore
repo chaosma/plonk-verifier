@@ -5,3 +5,7 @@
 testdata
 
 Cargo.lock
+*.txt
+*.log
+playground
+*.sh

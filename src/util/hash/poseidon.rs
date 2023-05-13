@@ -39,17 +39,19 @@ impl<F: FieldExt, L: LoadedScalar<F>, const T: usize, const RATE: usize> State<F
     }
 
     fn absorb_with_pre_constants(&mut self, inputs: &[L], pre_constants: &[F; T]) {
+        // chao: inputs has to be <= RATE, T=RATE+CAPACITY and CAPACITY=1 here
         assert!(inputs.len() < T);
 
         self.inner[0] = self
             .loader()
-            .sum_with_const(&[&self.inner[0]], pre_constants[0]);
+            .sum_with_const(&[&self.inner[0]], pre_constants[0]); // chao: first element is capacity, s0->s0+c[0]
         self.inner
             .iter_mut()
             .zip(pre_constants.iter())
             .skip(1)
             .zip(inputs)
             .for_each(|((state, constant), input)| {
+                // chao: s[i] = s[i] + input[i] + c[i], here input length might less than RATE
                 *state = state.loader().sum_with_const(&[state, input], *constant);
             });
         self.inner
@@ -58,6 +60,8 @@ impl<F: FieldExt, L: LoadedScalar<F>, const T: usize, const RATE: usize> State<F
             .skip(1 + inputs.len())
             .enumerate()
             .for_each(|(idx, (state, constant))| {
+                // chao: when inputs.len() < RATE
+                // add ending element of squeeze F::ONE: s[i] = s[i] + 1 before doing s[i] = s[i] + c[i] 
                 *state = state.loader().sum_with_const(
                     &[state],
                     if idx == 0 {
@@ -174,5 +178,28 @@ impl<F: FieldExt, L: LoadedScalar<F>, const T: usize, const RATE: usize> Poseido
         }
         self.state.sbox_full(&[F::zero(); T]);
         self.state.apply_mds(&mds);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use halo2_curves::pasta::Fp;
+    use crate::loader::native::NativeLoader;
+    #[test]
+    fn test_poseidon_hash() {
+        const T: usize = 17;
+        const RATE: usize = 16;
+        const R_F: usize = 8;
+        const R_P: usize = 10;
+        type PH = Poseidon<Fp, Fp, T, RATE>;
+        let mut poseidon = PH::new(&NativeLoader, R_F, R_P);
+        let mut input = Vec::new();
+        for i in 0..20 {
+            input.push(Fp::from(i as u64));
+        }
+        poseidon.update(&input[..]);
+        let output = poseidon.squeeze();
+        println!("hash = {:?}", output);
     }
 }
